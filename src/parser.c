@@ -18,6 +18,13 @@
 // without actually creating the instance of it.
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
+#define ENSURE_ROW_SLOT(table, row_num)                       \
+    void *row_slot = _row_slot(table, row_num);               \
+    if (row_slot == NULL) {                                   \
+        fprintf(stderr, "Error: Unable to fetch row_slot\n"); \
+        return;                                               \
+    }
+
 /*******************************************************************************
                         ENUMS/STRUCTS DECLARATION STUFF
 *******************************************************************************/
@@ -136,7 +143,7 @@ static StatementRecognitionResult _make_statement(
                     if (sscanf(input_buffer->buffer, "insert %zu %31s", &id,
                                username) < 2) {
                         fprintf(stderr,
-                                "Syntax error. Correct usage: insert <id> "
+                                "Syntax Error: Correct usage: insert <id> "
                                 "<username>\n");
                         return STATEMENT_INCOMPLETE;
                     }
@@ -171,9 +178,18 @@ static void _deserializer(const void *src, Row *const dest) {
 static void *_row_slot(Table *table, size_t row_num) {
     size_t page_num = row_num / ROWS_PER_PAGE;
     size_t row_offset = row_num % ROWS_PER_PAGE;
+    if (page_num >= TABLE_MAX_PAGES) {
+        fprintf(stderr, "Error: Exceeded maximum number of pages\n");
+        return NULL;
+    }
     void *page = table->pages[page_num];
     if (page == NULL) {
         page = table->pages[page_num] = malloc(PAGE_SIZE);
+        if (page == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed for page %zu\n",
+                    page_num);
+            return NULL;
+        }
     }
     // printf("page_num -> %zu | row_offset = %zu | row_size -> %hhu\n",
     // page_num,
@@ -200,7 +216,8 @@ static void _insert_execute(const Statement *statement) {
         return;
     }
     const Row *row = &(statement->data);
-    _serializer(row, _row_slot(&table, table.num_rows));
+    ENSURE_ROW_SLOT(&table, table.num_rows);
+    _serializer(row, row_slot);
     // printf("_row_slot(&table, table.num_rows) -> %p AND num_row -> %zu\n",
     //        _row_slot(&table, table.num_rows), table.num_rows);
     table.num_rows += 1;
@@ -210,7 +227,8 @@ static void _select_execute(const Statement *statement) {
     (void)statement;
     Row row;
     for (size_t i = 0; i < table.num_rows; ++i) {
-        _deserializer(_row_slot(&table, i), &row);
+        ENSURE_ROW_SLOT(&table, i);
+        _deserializer(row_slot, &row);
         _print_row(&row);
     }
 }
