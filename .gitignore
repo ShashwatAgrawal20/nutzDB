@@ -1,3 +1,5 @@
-nutzDB
+.cache/
+compile_commands.json
 database.db
+nutzDB
 vgcore.*

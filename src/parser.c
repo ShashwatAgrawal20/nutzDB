@@ -6,12 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "headers/lib.h"
+#include "headers/pager.h"
 #include "headers/repl.h"
 
 /*******************************************************************************
                            PRIVATE DECLARATION STUFF
 *******************************************************************************/
-#define TABLE_MAX_PAGES 100
 #define COLUMN_USERNAME_SIZE 32
 
 // Some cool offsetof trick to get the sizeof the datamembers of the struct
@@ -42,7 +43,7 @@ typedef struct {
 } Row;
 
 typedef struct {
-    void *pages[TABLE_MAX_PAGES];
+    Pager *pager;
     size_t num_rows;
 } Table;
 
@@ -108,6 +109,15 @@ static const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 *******************************************************************************/
 void Parser(inputbuffer_t *input_buffer) {
     Statement statement;
+    if (table.pager == NULL) {
+        table.pager = pager_init();
+        if (table.pager == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed for pager.\n");
+            return;
+        }
+        table.num_rows = 0;
+        // printf("%zu %zu", table.pager->fd, table.pager->length);
+    }
     switch (_make_statement(input_buffer, &statement)) {
         case (STATEMENT_RECOGNIZED):
             _statement_executer(&statement);
@@ -124,10 +134,17 @@ void Parser(inputbuffer_t *input_buffer) {
                                PRIVATE FUNCTIONS
 *******************************************************************************/
 static void __attribute__((destructor)) _cleanup(void) {
-    for (uint8_t i = 0; table.pages[i]; ++i) {
-        free(table.pages[i]);
-        table.pages[i] = NULL;
+    for (uint8_t i = 0; i < TABLE_MAX_PAGES; ++i) {
+        if (table.pager->pages[i] != NULL) {
+            free(table.pager->pages[i]);
+            table.pager->pages[i] = NULL;
+            printf("free called\n");
+        } else {
+            break;
+        }
     }
+    free(table.pager);
+    table.pager = NULL;
 }
 
 static StatementRecognitionResult _make_statement(
@@ -182,9 +199,9 @@ static void *_row_slot(Table *table, size_t row_num) {
         fprintf(stderr, "Error: Exceeded maximum number of pages\n");
         return NULL;
     }
-    void *page = table->pages[page_num];
+    void *page = table->pager->pages[page_num];
     if (page == NULL) {
-        page = table->pages[page_num] = malloc(PAGE_SIZE);
+        page = table->pager->pages[page_num] = malloc(PAGE_SIZE);
         if (page == NULL) {
             fprintf(stderr, "Error: Memory allocation failed for page %zu\n",
                     page_num);
