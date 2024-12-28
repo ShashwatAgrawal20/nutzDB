@@ -134,17 +134,19 @@ void Parser(inputbuffer_t *input_buffer) {
                                PRIVATE FUNCTIONS
 *******************************************************************************/
 static void __attribute__((destructor)) _cleanup(void) {
-    for (uint8_t i = 0; i < TABLE_MAX_PAGES; ++i) {
-        if (table.pager->pages[i] != NULL) {
-            free(table.pager->pages[i]);
-            table.pager->pages[i] = NULL;
-            printf("free called\n");
-        } else {
-            break;
+    if (table.pager) {
+        for (uint8_t i = 0; i < TABLE_MAX_PAGES; ++i) {
+            if (table.pager->pages[i] != NULL) {
+                free(table.pager->pages[i]);
+                table.pager->pages[i] = NULL;
+                // printf("free called\n");
+            } else {
+                break;
+            }
         }
+        free(table.pager);
+        table.pager = NULL;
     }
-    free(table.pager);
-    table.pager = NULL;
 }
 
 static StatementRecognitionResult _make_statement(
