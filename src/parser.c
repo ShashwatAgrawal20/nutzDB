@@ -11,7 +11,7 @@
 #include "headers/repl.h"
 
 /*******************************************************************************
-                           PRIVATE DECLARATION STUFF
+                                CONFIG CONSTANTS
 *******************************************************************************/
 #define COLUMN_USERNAME_SIZE 32
 
@@ -100,7 +100,6 @@ static const uint8_t USERNAME_SIZE = size_of_attribute(Row, username);
 static const uint8_t ID_OFFSET = 0;
 static const uint8_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
 static const uint8_t ROW_SIZE = ID_SIZE + USERNAME_SIZE;
-static const uint16_t PAGE_SIZE = 4096;
 static const uint8_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
 static const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
@@ -115,7 +114,7 @@ void Parser(inputbuffer_t *input_buffer) {
             fprintf(stderr, "Error: Memory allocation failed for pager.\n");
             return;
         }
-        table.num_rows = 0;
+        table.num_rows = table.pager->file_length / ROW_SIZE;
         // printf("%zu %zu", table.pager->fd, table.pager->length);
     }
     switch (_make_statement(input_buffer, &statement)) {
@@ -201,14 +200,12 @@ static void *_row_slot(Table *table, size_t row_num) {
         fprintf(stderr, "Error: Exceeded maximum number of pages\n");
         return NULL;
     }
-    void *page = table->pager->pages[page_num];
+    void *page = get_page(table->pager, page_num);
     if (page == NULL) {
-        page = table->pager->pages[page_num] = malloc(PAGE_SIZE);
-        if (page == NULL) {
-            fprintf(stderr, "Error: Memory allocation failed for page %zu\n",
-                    page_num);
-            return NULL;
-        }
+        fprintf(stderr,
+                "Error: Something went wrong while getting the page %zu\n",
+                page_num);
+        return NULL;
     }
     // printf("page_num -> %zu | row_offset = %zu | row_size -> %hhu\n",
     // page_num,
